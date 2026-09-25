@@ -82,12 +82,18 @@ JS_TARJETAS = """
 """
 
 JS_DOCUMENTOS = """
-() => Array.from(document.querySelectorAll('a[href]'))
-  .filter(a => /get_file|\\/documents\\/|\\.pdf(\\?|$)/i.test(a.getAttribute('href')) || /\\.pdf\\s*$/i.test(a.innerText || ''))
-  .map(a => {
+() => {
+  const esDoc = a => /get_file|\\/documents\\/|\\.pdf(\\?|$)/i.test(a.getAttribute('href')) ||
+                     /\\.pdf\\s*$/i.test(a.innerText || '');
+  const todos = Array.from(document.querySelectorAll('a[href]')).filter(esDoc);
+  // Solo la tabla de documentos de la publicación; se excluyen enlaces generales del sitio
+  // («Ver Instructivo», «Ver ABC»). Si no hay tabla, se usan todos.
+  const enTabla = todos.filter(a => a.closest('tr'));
+  return (enTabla.length ? enTabla : todos).map(a => {
     const tr = a.closest('tr');
     return {nombre: (a.innerText || '').trim(), href: a.href, fila: tr ? tr.innerText.trim() : ''};
-  })
+  });
+}
 """
 
 
@@ -252,6 +258,10 @@ class PublicacionesClient:
         return []
 
     def _indice(self, etiqueta: str) -> int | None:
+        # Primero por id/name (en el portal: departamento, municipio, entidad, especialidad, despacho).
+        for s in self._selects:
+            if sin_tildes(s["id"] or "") == etiqueta or sin_tildes(s["name"] or "") == etiqueta:
+                return s["i"]
         for s in self._selects:
             if etiqueta in sin_tildes(s["label"]) or etiqueta in sin_tildes(s["name"] or s["id"] or ""):
                 return s["i"]

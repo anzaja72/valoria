@@ -72,14 +72,21 @@ def codigo_de_opcion(texto: str) -> str | None:
     return m.group(1) if m else None
 
 
-def candidatos_despacho(radicado: str, opciones: list[str], maximo: int = 4) -> list[str]:
-    """Ordena las opciones de despacho del portal por afinidad con el radicado.
+# Especialidades que publican bajo el mismo despacho (observado en el portal: radicado 080013153002…
+# publicado por 080013103002 - JUZGADO 002 CIVIL DEL CIRCUITO DE BARRANQUILLA).
+ESPECIALIDADES_EQUIVALENTES = {"53": {"03"}, "03": {"53"}}
 
-    1. Código exacto (12 dígitos).
-    2. Mismo depto+municipio+entidad y mismo número de despacho (difiere la especialidad).
+
+def candidatos_despacho(radicado: str, opciones: list[str], maximo: int = 4) -> list[str]:
+    """Despachos del portal a revisar para el radicado, del más al menos probable.
+
+    1. Código exacto (12 dígitos) → solo ese.
+    2. Si no, misma ubicación/entidad/número con especialidad equivalente (53 ↔ 03) → solo esos.
+    3. Si no, mismo depto+municipio+entidad y número de despacho con otra especialidad (hasta `maximo`).
     """
     p = partes(radicado)
-    exactos, parecidos = [], []
+    equivalentes = ESPECIALIDADES_EQUIVALENTES.get(p.especialidad, set())
+    exactos, afines, parecidos = [], [], []
     for texto in opciones:
         cod = codigo_de_opcion(texto)
         if not cod:
@@ -87,8 +94,8 @@ def candidatos_despacho(radicado: str, opciones: list[str], maximo: int = 4) -> 
         if cod == p.codigo_despacho:
             exactos.append(texto)
         elif cod[:7] == radicado[:7] and cod[9:12] == p.numero_despacho:
-            parecidos.append(texto)
-    return (exactos + parecidos)[:maximo]
+            (afines if cod[7:9] in equivalentes else parecidos).append(texto)
+    return exactos or afines or parecidos[:maximo]
 
 
 def sin_tildes(texto: str) -> str:

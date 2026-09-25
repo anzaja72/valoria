@@ -14,11 +14,14 @@ from .conftest import WEB
 
 RAD = "08001315300220260014600"  # fila del video: Estado No. 70, Juzgado 002 Civil Circuito Barranquilla
 
+# Opciones reales vistas en el portal (diagnóstico del 2026-09-25).
 OPCIONES = [
     "Todos",
     "080013103001 - JUZGADO 001 CIVIL DEL CIRCUITO DE BARRANQUILLA",
     "080013103002 - JUZGADO 002 CIVIL DEL CIRCUITO DE BARRANQUILLA",
-    "080013110002 - JUZGADO 002 DE FAMILIA DEL CIRCUITO DE BARRANQUILLA",
+    "080013105002 - JUZGADO 002 LABORAL DEL CIRCUITO DE BARRANQUILLA",
+    "080013107002 - JUZGADO 002 PENAL DE CIRCUITO ESPECIALIZADO DE BARRANQUILLA",
+    "080013109002 - JUZGADO 002 PENAL DEL CIRCUITO CON FUNCIÓN DE CONOCIMIENTO DE BARRANQUILLA",
     "080014003002 - JUZGADO 002 CIVIL MUNICIPAL DE BARRANQUILLA",
 ]
 
@@ -30,11 +33,19 @@ def test_partes_radicado():
     assert p.patron_auto == "002-2026-00146"
 
 
-def test_candidatos_despacho_por_numero_y_entidad():
-    c = candidatos_despacho(RAD, OPCIONES)
-    assert c[0].startswith("080013103002")          # civil circuito 002 (el del video)
-    assert all("MUNICIPAL" not in x for x in c)       # entidad distinta (40) descartada
-    assert candidatos_despacho("08001310300120200000100", OPCIONES)[0].startswith("080013103001")
+def test_candidatos_especialidad_equivalente_53_a_03():
+    # 080013153002 no existe en el portal; lo publica el civil 03. No se revisan laboral ni penal.
+    assert candidatos_despacho(RAD, OPCIONES) == [OPCIONES[2]]
+
+
+def test_candidatos_exacto():
+    assert candidatos_despacho("08001310300120200000100", OPCIONES) == [OPCIONES[1]]
+
+
+def test_candidatos_sin_equivalente_revisa_parecidos():
+    # especialidad 10 (familia) no está publicada: se prueban los de igual número y entidad
+    c = candidatos_despacho("08001311000220260000100", OPCIONES)
+    assert OPCIONES[2] in c and OPCIONES[3] in c and all("MUNICIPAL" not in x for x in c)
 
 
 def test_clasificar_documentos_del_video():
