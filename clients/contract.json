@@ -1,0 +1,32 @@
+{
+  "tool": "consultar_proceso",
+  "version": "0.1.0",
+  "base_url": "https://consulta.legal-ia.co",
+  "endpoints": {
+    "health": {"method": "GET", "path": "/health", "auth": false},
+    "tool_schema": {"method": "GET", "path": "/v1/tool_schema", "auth": true},
+    "consultar": {"method": "POST", "path": "/v1/consultar_proceso", "auth": true}
+  },
+  "auth": {
+    "type": "bearer",
+    "header": "Authorization: Bearer <TOOL_API_KEY>",
+    "key_prefixes": {"web": "web_", "desktop": "desktop_"}
+  },
+  "timeout_ms": 90000,
+  "request_example": {"radicado": "15236408900120200006200", "forzar_actualizacion": false},
+  "statuses": {
+    "ok": "Mostrar mensaje_chat y para_el_abogado.texto; actuaciones vienen de la más reciente a la más antigua.",
+    "not_found": "Mostrar mensaje_chat; sugerir verificar los 23 dígitos.",
+    "captcha_required": "Mostrar mensaje_chat y un botón/enlace a url_oficial. NO reintentar en bucle.",
+    "error": "Mostrar mensaje_chat. error_code: invalid_radicado | portal_unavailable | timeout | portal_error | respuesta_invalida | scraper_error. Como máximo un reintento manual del usuario."
+  },
+  "rules": [
+    "Mostrar siempre mensaje_chat.",
+    "En captcha_required abrir url_oficial; nunca automatizar el CAPTCHA.",
+    "HTTP 401 = clave inválida; HTTP 503 = servicio sin claves configuradas; otros resultados de negocio llegan con HTTP 200 y status."
+  ],
+  "response_fields": [
+    "status", "radicado", "mensaje_chat", "url_oficial", "fuente", "consultado_en", "desde_cache",
+    "error_code", "proceso", "coincidencias", "total_actuaciones", "actuaciones", "para_el_abogado"
+  ]
+}

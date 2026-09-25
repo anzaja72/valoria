@@ -1,0 +1,33 @@
+services:
+  api:
+    build: .
+    image: legal-ia-procesos:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8088:8088"   # solo loopback; el proxy (Caddy/nginx) publica HTTPS
+    volumes:
+      - ./store:/app/store
+    shm_size: "1gb"             # Chromium necesita /dev/shm amplio
+    init: true
+
+  # Proxy HTTPS opcional: `docker compose --profile caddy up -d`
+  caddy:
+    image: caddy:2
+    profiles: ["caddy"]
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-consulta.legal-ia.co}
+      UPSTREAM: api:8088
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
