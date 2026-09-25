@@ -140,13 +140,16 @@ class CPNUClient:
             await self._detectar_captcha(page)
 
             consulta = await self._buscar_por_ui(page, radicado)
-            if consulta is None:
-                log.info("UI no disponible/cambiada; usando API directa para %s", radicado)
+            procesos = (consulta or {}).get("procesos") or []
+            if not procesos:
+                # La UI puede haber buscado solo procesos activos o haber cambiado:
+                # se confirma siempre con la API pidiendo todos los procesos.
+                log.info("UI %s; confirmando con API directa (SoloActivos=false) para %s",
+                         "sin resultados" if consulta is not None else "no disponible", radicado)
+                await self._detectar_captcha(page)
                 consulta = await self._api(context, "/Procesos/Consulta/NumeroRadicacion",
                                            {"numero": radicado, "SoloActivos": "false", "pagina": 1})
-            await self._detectar_captcha(page)
-
-            procesos = (consulta or {}).get("procesos") or []
+                procesos = (consulta or {}).get("procesos") or []
             if not procesos:
                 return ResultadoCPNU("not_found")
 
@@ -207,8 +210,10 @@ class CPNUClient:
             ) as info:
                 await boton.click(timeout=5_000)
             r = await info.value
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
+            log.info("Búsqueda por UI falló: %s", str(e).splitlines()[0] if str(e) else type(e).__name__)
             return None
+        log.info("UI -> %s HTTP %s", r.url, r.status)
         try:
             data = await r.json()
         except Exception:  # noqa: BLE001

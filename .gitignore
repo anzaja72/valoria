@@ -7,3 +7,4 @@ store/*
 !store/.gitkeep
 *.log
 .DS_Store
+diagnostico_cpnu.png
