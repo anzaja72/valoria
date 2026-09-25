@@ -180,6 +180,7 @@ MENSAJES = {
 }
 
 
-def mensaje_estado(clave: str, radicado: str | None) -> str:
+def mensaje_estado(clave: str, radicado: str | None, extra: dict[str, str] | None = None) -> str:
     r = formatear_radicado(radicado) if radicado else "indicado"
-    return MENSAJES.get(clave, MENSAJES["default"]).format(r=r)
+    plantillas = {**MENSAJES, **(extra or {})}
+    return plantillas.get(clave, MENSAJES["default"]).format(r=r)

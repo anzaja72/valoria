@@ -31,6 +31,8 @@ class Settings:
     max_actuaciones: int = field(default_factory=lambda: _int("MAX_ACTUACIONES", 30))
     store_dir: Path = field(default_factory=lambda: Path(os.getenv("STORE_DIR", "store")))
     headless: bool = field(default_factory=lambda: os.getenv("HEADLESS", "true").lower() != "false")
+    publicaciones_url: str = field(default_factory=lambda: os.getenv(
+        "PUBLICACIONES_URL", "https://publicacionesprocesales.ramajudicial.gov.co/"))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
 
 

@@ -3,17 +3,46 @@
   "version": "0.1.0",
   "base_url": "https://consulta.legal-ia.co",
   "endpoints": {
-    "health": {"method": "GET", "path": "/health", "auth": false},
-    "tool_schema": {"method": "GET", "path": "/v1/tool_schema", "auth": true},
-    "consultar": {"method": "POST", "path": "/v1/consultar_proceso", "auth": true}
+    "health": {
+      "method": "GET",
+      "path": "/health",
+      "auth": false
+    },
+    "tool_schema": {
+      "method": "GET",
+      "path": "/v1/tool_schema",
+      "auth": true,
+      "query": "?tool=consultar_proceso|consultar_estados"
+    },
+    "consultar": {
+      "method": "POST",
+      "path": "/v1/consultar_proceso",
+      "auth": true
+    },
+    "tools": {
+      "method": "GET",
+      "path": "/v1/tools",
+      "auth": true
+    },
+    "consultar_estados": {
+      "method": "POST",
+      "path": "/v1/consultar_estados",
+      "auth": true
+    }
   },
   "auth": {
     "type": "bearer",
     "header": "Authorization: Bearer <TOOL_API_KEY>",
-    "key_prefixes": {"web": "web_", "desktop": "desktop_"}
+    "key_prefixes": {
+      "web": "web_",
+      "desktop": "desktop_"
+    }
   },
   "timeout_ms": 90000,
-  "request_example": {"radicado": "15236408900120200006200", "forzar_actualizacion": false},
+  "request_example": {
+    "radicado": "15236408900120200006200",
+    "forzar_actualizacion": false
+  },
   "statuses": {
     "ok": "Mostrar mensaje_chat y para_el_abogado.texto; actuaciones vienen de la más reciente a la más antigua.",
     "not_found": "Mostrar mensaje_chat; sugerir verificar los 23 dígitos.",
@@ -26,7 +55,41 @@
     "HTTP 401 = clave inválida; HTTP 503 = servicio sin claves configuradas; otros resultados de negocio llegan con HTTP 200 y status."
   ],
   "response_fields": [
-    "status", "radicado", "mensaje_chat", "url_oficial", "fuente", "consultado_en", "desde_cache",
-    "error_code", "proceso", "coincidencias", "total_actuaciones", "actuaciones", "para_el_abogado"
-  ]
+    "status",
+    "radicado",
+    "mensaje_chat",
+    "url_oficial",
+    "fuente",
+    "consultado_en",
+    "desde_cache",
+    "error_code",
+    "proceso",
+    "coincidencias",
+    "total_actuaciones",
+    "actuaciones",
+    "para_el_abogado"
+  ],
+  "tools": [
+    "consultar_proceso",
+    "consultar_estados"
+  ],
+  "request_example_estados": {
+    "radicado": "08001315300220260014600",
+    "fecha_inicio": "2026-09-21",
+    "fecha_fin": "2026-09-25"
+  },
+  "estados": {
+    "fuente": "https://publicacionesprocesales.ramajudicial.gov.co/",
+    "default_rango": "últimos 5 días hábiles (lunes a viernes, sin descontar festivos); máximo 31 días",
+    "respuesta": "status ok + aparece (true/false). Si aparece: coincidencias[] con numero_estado, fecha_publicacion, clase, partes, fecha_auto, anotacion, ponente, pdf_estado y autos[] (PDF de la providencia).",
+    "error_codes": [
+      "invalid_radicado",
+      "rango_invalido",
+      "despacho_no_encontrado",
+      "formulario_cambiado",
+      "portal_unavailable",
+      "timeout",
+      "scraper_error"
+    ]
+  }
 }

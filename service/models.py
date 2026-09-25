@@ -70,3 +70,65 @@ class ConsultaResponse(BaseModel):
     actuaciones: list[Actuacion] = []
     para_el_abogado: ParaElAbogado | None = None
     debug: dict[str, Any] | None = None
+
+
+# ---------------------------------------------------------------------------------------------
+# consultar_estados (publicacionesprocesales.ramajudicial.gov.co)
+
+class EstadosRequest(BaseModel):
+    radicado: str = Field(..., description="Número de radicación de 23 dígitos.")
+    fecha_inicio: str | None = Field(None, description="YYYY-MM-DD. Por defecto: hace 5 días hábiles.")
+    fecha_fin: str | None = Field(None, description="YYYY-MM-DD. Por defecto: hoy.")
+    forzar_actualizacion: bool = False
+
+
+class DocumentoOut(BaseModel):
+    nombre: str
+    url: str
+
+
+class PublicacionOut(BaseModel):
+    titulo: str
+    despacho: str
+    numero_estado: str | None = None
+    fecha_publicacion: str | None = None
+    url_detalle: str | None = None
+    documentos: int = 0
+    pdfs_leidos: int = 0
+    pdfs_ilegibles: list[str] = []
+
+
+class CoincidenciaOut(BaseModel):
+    numero_estado: str | None = None
+    fecha_publicacion: str | None = None
+    despacho: str
+    titulo: str
+    clase: str | None = None
+    demandante: str | None = None
+    demandado: str | None = None
+    fecha_auto: str | None = None
+    anotacion: str | None = None
+    ponente: str | None = None
+    texto: str | None = None
+    pdf_estado: DocumentoOut | None = None
+    autos: list[DocumentoOut] = []
+    url_detalle: str | None = None
+
+
+class EstadosResponse(BaseModel):
+    status: Status
+    radicado: str | None
+    aparece: bool | None = None
+    mensaje_chat: str
+    url_oficial: str
+    fuente: str = "publicacionesprocesales"
+    fecha_inicio: str | None = None
+    fecha_fin: str | None = None
+    consultado_en: str
+    desde_cache: bool = False
+    error_code: str | None = None
+    despachos_revisados: list[str] = []
+    coincidencias: list[CoincidenciaOut] = []
+    publicaciones_revisadas: list[PublicacionOut] = []
+    advertencias: list[str] = []
+    para_el_abogado: str | None = None

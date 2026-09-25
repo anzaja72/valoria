@@ -18,20 +18,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .browser import (CAPTCHA_TEXTO, CaptchaRequerido, Navegador, PortalError, detectar_captcha,
+                      es_error_de_red)
 from .config import CPNU_API_BASE, CPNU_BASE_URL, URL_OFICIAL
 
 log = logging.getLogger("cpnu")
 
-CAPTCHA_SELECTORES = (
-    "iframe[src*='recaptcha']",
-    "iframe[src*='hcaptcha']",
-    "iframe[src*='turnstile']",
-    "iframe[title*='captcha' i]",
-    "div.g-recaptcha",
-    "div.h-captcha",
-    "div.cf-turnstile",
-)
-CAPTCHA_TEXTO = re.compile(r"captcha|no soy un robot|verifique que es humano|verify you are human", re.I)
 INPUT_SELECTORES = (
     "input[maxlength='23']",
     "input[placeholder*='23' i]",
@@ -52,16 +44,6 @@ class ResultadoCPNU:
     detalle_error: str | None = None
 
 
-class PortalError(Exception):
-    def __init__(self, code: str, msg: str = "") -> None:
-        super().__init__(msg or code)
-        self.code = code
-
-
-class CaptchaRequerido(Exception):
-    pass
-
-
 def elegir_proceso(procesos: list[dict[str, Any]]) -> dict[str, Any]:
     """Si hay varios registros con el mismo radicado, toma el de actuación más reciente."""
     return max(procesos, key=lambda p: (p.get("fechaUltimaActuacion") or "", p.get("idProceso") or 0))
@@ -69,40 +51,21 @@ def elegir_proceso(procesos: list[dict[str, Any]]) -> dict[str, Any]:
 
 class CPNUClient:
     def __init__(self, headless: bool = True, max_concurrent: int = 2, timeout_s: int = 75,
-                 max_paginas_actuaciones: int = 3) -> None:
-        self.headless = headless
+                 max_paginas_actuaciones: int = 3, navegador: Navegador | None = None) -> None:
+        self.nav = navegador or Navegador(headless)
         self.timeout_s = timeout_s
         self.max_paginas = max_paginas_actuaciones
         self._sem = asyncio.Semaphore(max_concurrent)
-        self._pw = None
-        self._browser = None
-        self._browser_lock = asyncio.Lock()
 
-    # ---------- ciclo de vida ----------
     async def start(self) -> None:
-        async with self._browser_lock:
-            if self._browser and self._browser.is_connected():
-                return
-            from playwright.async_api import async_playwright
-
-            if self._pw is None:
-                self._pw = await async_playwright().start()
-            self._browser = await self._pw.chromium.launch(
-                headless=self.headless, args=["--disable-dev-shm-usage", "--no-sandbox"]
-            )
-            log.info("Chromium iniciado")
+        await self.nav.start()
 
     async def stop(self) -> None:
-        if self._browser:
-            await self._browser.close()
-            self._browser = None
-        if self._pw:
-            await self._pw.stop()
-            self._pw = None
+        await self.nav.stop()
 
     @property
     def listo(self) -> bool:
-        return bool(self._browser and self._browser.is_connected())
+        return self.nav.listo
 
     # ---------- API pública ----------
     async def consultar(self, radicado: str) -> ResultadoCPNU:
@@ -117,7 +80,7 @@ class CPNUClient:
             except PortalError as e:
                 return ResultadoCPNU("error", error_code=e.code, detalle_error=str(e))
             except Exception as e:  # noqa: BLE001 — siempre error estructurado
-                if "net::ERR_" in str(e) or "ECONNREFUSED" in str(e) or "ECONNRESET" in str(e):
+                if es_error_de_red(e):
                     log.warning("Red/portal caído consultando %s: %s", radicado, str(e).splitlines()[0])
                     return ResultadoCPNU("error", error_code="portal_unavailable",
                                          detalle_error="No hay conexión con el portal CPNU")
@@ -126,18 +89,13 @@ class CPNUClient:
 
     # ---------- implementación ----------
     async def _consultar(self, radicado: str) -> ResultadoCPNU:
-        await self.start()
-        context = await self._browser.new_context(
-            locale="es-CO",
-            timezone_id="America/Bogota",
-            extra_http_headers={"Accept-Language": "es-CO,es;q=0.9"},
-        )
+        context = await self.nav.new_context()
         try:
             page = await context.new_page()
             resp = await page.goto(URL_OFICIAL, wait_until="domcontentloaded", timeout=30_000)
             if resp is not None and resp.status >= 500:
                 raise PortalError("portal_unavailable", f"CPNU respondió HTTP {resp.status}")
-            await self._detectar_captcha(page)
+            await detectar_captcha(page)
 
             consulta = await self._buscar_por_ui(page, radicado)
             procesos = (consulta or {}).get("procesos") or []
@@ -146,7 +104,7 @@ class CPNUClient:
                 # se confirma siempre con la API pidiendo todos los procesos.
                 log.info("UI %s; confirmando con API directa (SoloActivos=false) para %s",
                          "sin resultados" if consulta is not None else "no disponible", radicado)
-                await self._detectar_captcha(page)
+                await detectar_captcha(page)
                 consulta = await self._api(context, "/Procesos/Consulta/NumeroRadicacion",
                                            {"numero": radicado, "SoloActivos": "false", "pagina": 1})
                 procesos = (consulta or {}).get("procesos") or []
@@ -170,17 +128,6 @@ class CPNUClient:
             )
         finally:
             await context.close()
-
-    async def _detectar_captcha(self, page) -> None:
-        for sel in CAPTCHA_SELECTORES:
-            if await page.locator(sel).count():
-                raise CaptchaRequerido()
-        try:
-            texto = await page.locator("body").inner_text(timeout=2_000)
-        except Exception:  # noqa: BLE001
-            return
-        if CAPTCHA_TEXTO.search(texto or ""):
-            raise CaptchaRequerido()
 
     async def _buscar_por_ui(self, page, radicado: str) -> dict | None:
         """Llena el formulario oficial. Devuelve el JSON de la búsqueda o None si la UI no cuadra."""
