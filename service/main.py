@@ -6,7 +6,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from . import __version__
@@ -23,6 +23,7 @@ from .formatter import (
 from .formatter_estados import (
     MENSAJES_ERROR, coincidencia_out, mensaje_estados, para_el_abogado, publicacion_out,
 )
+from .mcp_server import registrar_mcp
 from .models import ConsultaRequest, ConsultaResponse, EstadosRequest, EstadosResponse
 from .publicaciones import URL_PUBLICACIONES, PublicacionesClient, ResultadoEstados
 from .radicado import normalizar_radicado
@@ -87,54 +88,62 @@ def create_app(settings: Settings | None = None, cpnu: CPNUClient | None = None,
         return TOOLS
 
     @app.post("/v1/consultar_proceso", response_model=ConsultaResponse, response_model_exclude_none=True)
-    async def consultar_proceso(body: ConsultaRequest, request: Request,
-                                canal: str = Depends(verificar_bearer)):
-        t0 = time.monotonic()
-        radicado = normalizar_radicado(body.radicado)
-        if not radicado:
-            return _error(None, "invalid_radicado")
-
-        cache: TTLCache = app.state.cache
-        async with cache.lock(radicado):
-            if not body.forzar_actualizacion and (hit := cache.get(radicado)):
-                resp, _edad = hit
-                out = resp.model_copy(update={"desde_cache": True})
-                _log(canal, radicado, out.status, t0, cache=True)
-                return out
-
-            crudo = await cliente.consultar(radicado)
-            resp = _construir(radicado, crudo, app.state.store, settings)
-            if resp.status in ("ok", "not_found"):
-                cache.set(radicado, resp)
-        _log(canal, radicado, resp.status, t0, cache=False, code=resp.error_code)
-        return resp
+    async def consultar_proceso(body: ConsultaRequest, canal: str = Depends(verificar_bearer)):
+        return await ejecutar_proceso(app, body, canal)
 
     @app.post("/v1/consultar_estados", response_model=EstadosResponse, response_model_exclude_none=True)
     async def consultar_estados(body: EstadosRequest, canal: str = Depends(verificar_bearer)):
-        t0 = time.monotonic()
-        radicado = normalizar_radicado(body.radicado)
-        if not radicado:
-            return _error_estados(None, "invalid_radicado")
-        try:
-            ini, fin = _rango(body.fecha_inicio, body.fecha_fin)
-        except ValueError:
-            return _error_estados(radicado, "rango_invalido")
+        return await ejecutar_estados(app, body, canal)
 
-        clave = f"{radicado}:{ini}:{fin}"
-        cache: TTLCache = app.state.cache_estados
-        async with cache.lock(clave):
-            if not body.forzar_actualizacion and (hit := cache.get(clave)):
-                out = hit[0].model_copy(update={"desde_cache": True})
-                _log(canal, radicado, out.status, t0, cache=True)
-                return out
-            crudo = await pub_cliente.consultar(radicado, ini, fin)
-            resp = _construir_estados(radicado, ini, fin, crudo)
-            if resp.status == "ok":
-                cache.set(clave, resp)
-        _log(canal, radicado, resp.status, t0, cache=False, code=resp.error_code)
-        return resp
-
+    registrar_mcp(app)
     return app
+
+
+async def ejecutar_proceso(app: FastAPI, body: ConsultaRequest, canal: str) -> ConsultaResponse:
+    """Lógica de consultar_proceso, compartida por la API REST y el servidor MCP."""
+    t0 = time.monotonic()
+    radicado = normalizar_radicado(body.radicado)
+    if not radicado:
+        return _error(None, "invalid_radicado")
+
+    cache: TTLCache = app.state.cache
+    async with cache.lock(radicado):
+        if not body.forzar_actualizacion and (hit := cache.get(radicado)):
+            out = hit[0].model_copy(update={"desde_cache": True})
+            _log(canal, radicado, out.status, t0, cache=True)
+            return out
+        crudo = await app.state.cpnu.consultar(radicado)
+        resp = _construir(radicado, crudo, app.state.store, app.state.settings)
+        if resp.status in ("ok", "not_found"):
+            cache.set(radicado, resp)
+    _log(canal, radicado, resp.status, t0, cache=False, code=resp.error_code)
+    return resp
+
+
+async def ejecutar_estados(app: FastAPI, body: EstadosRequest, canal: str) -> EstadosResponse:
+    """Lógica de consultar_estados, compartida por la API REST y el servidor MCP."""
+    t0 = time.monotonic()
+    radicado = normalizar_radicado(body.radicado)
+    if not radicado:
+        return _error_estados(None, "invalid_radicado")
+    try:
+        ini, fin = _rango(body.fecha_inicio, body.fecha_fin)
+    except ValueError:
+        return _error_estados(radicado, "rango_invalido")
+
+    clave = f"{radicado}:{ini}:{fin}"
+    cache: TTLCache = app.state.cache_estados
+    async with cache.lock(clave):
+        if not body.forzar_actualizacion and (hit := cache.get(clave)):
+            out = hit[0].model_copy(update={"desde_cache": True})
+            _log(canal, radicado, out.status, t0, cache=True)
+            return out
+        crudo = await app.state.publicaciones.consultar(radicado, ini, fin)
+        resp = _construir_estados(radicado, ini, fin, crudo)
+        if resp.status == "ok":
+            cache.set(clave, resp)
+    _log(canal, radicado, resp.status, t0, cache=False, code=resp.error_code)
+    return resp
 
 
 def _rango(fecha_inicio: str | None, fecha_fin: str | None) -> tuple[date, date]:

@@ -7,6 +7,31 @@ Tools para el chat de **legal-ia.co** y **Legal-IA Desktop**. El usuario pega o 
 | `consultar_estados` ⭐ | `POST /v1/consultar_estados` | publicacionesprocesales.ramajudicial.gov.co | ¿Salió el radicado en **Notificaciones por Estados** en los últimos 5 días hábiles? Número de estado, fecha, anotación del auto, PDF del estado y de la providencia. |
 | `consultar_proceso` | `POST /v1/consultar_proceso` | consultaprocesos.ramajudicial.gov.co (CPNU) | Estado del proceso, actuaciones y bloque «Para el abogado». |
 
+### Servidor MCP
+
+Las dos herramientas también se exponen como **servidor MCP** (Model Context Protocol, transporte
+Streamable HTTP sin estado) para conectar legal-ia.co, Legal-IA Desktop o cualquier cliente MCP:
+
+- URL: `https://consulta.legal-ia.co/mcp`
+- Header: `Authorization: Bearer <TOOL_API_KEY>` (mismas claves `web_` / `desktop_`)
+- Herramientas: `consultar_estados`, `consultar_proceso` (misma lógica, cache y navegador que `/v1/*`)
+- Cada `tools/call` devuelve `content` (texto: `mensaje_chat` + «Para el abogado») y `structuredContent`
+  (la respuesta JSON completa). `isError: true` cuando el portal falló.
+
+Configuración típica de un cliente MCP:
+
+```json
+{
+  "mcpServers": {
+    "legal-ia-procesos": {
+      "type": "http",
+      "url": "https://consulta.legal-ia.co/mcp",
+      "headers": { "Authorization": "Bearer ${LEGAL_IA_TOOL_KEY}" }
+    }
+  }
+}
+```
+
 ### Cómo funciona `consultar_estados`
 Replica el flujo manual del portal de publicaciones:
 1. Deduce el despacho de los primeros 12 dígitos del radicado. Si el código exacto no está publicado, prueba

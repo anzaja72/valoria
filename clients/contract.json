@@ -28,6 +28,16 @@
       "method": "POST",
       "path": "/v1/consultar_estados",
       "auth": true
+    },
+    "mcp": {
+      "method": "POST",
+      "path": "/mcp",
+      "auth": true,
+      "protocol": "MCP Streamable HTTP (sin estado, respuestas JSON)",
+      "tools": [
+        "consultar_estados",
+        "consultar_proceso"
+      ]
     }
   },
   "auth": {
