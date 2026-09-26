@@ -1,0 +1,18 @@
+# HTTPS automático (Let's Encrypt). Requiere DNS A/AAAA de PUBLIC_DOMAIN apuntando al VPS.
+{$PUBLIC_DOMAIN:consulta.legal-ia.co} {
+	encode gzip
+	reverse_proxy {$UPSTREAM:127.0.0.1:8088} {
+		transport http {
+			response_header_timeout 95s
+		}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	log {
+		output stdout
+		format console
+	}
+}

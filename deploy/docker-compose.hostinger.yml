@@ -1,0 +1,83 @@
+# Despliegue en VPS Hostinger (Docker Manager), sin `build:`.
+# Usa la imagen oficial de Playwright (trae Chromium) y, al arrancar, descarga el código de la
+# rama indicada en GitHub e instala dependencias. Para actualizar: reiniciar el contenedor `api`.
+#
+# Variables de entorno del proyecto (hPanel → Docker Manager → proyecto → Entorno):
+#   TOOL_API_KEYS=web_...,desktop_...   (una sola línea, separadas por coma, sin espacios)
+#   PUBLIC_DOMAIN=consulta.legal-ia.co  (dominio con registro A apuntando al VPS)
+services:
+  api:
+    image: mcr.microsoft.com/playwright/python:v1.56.0-noble
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      TOOL_API_KEYS: ${TOOL_API_KEYS:-}
+      GIT_REF: ${GIT_REF:-claude/hopeful-euler-2j0026}
+      CACHE_TTL_SECONDS: "600"
+      SCRAPER_TIMEOUT_SECONDS: "75"
+      MAX_CONCURRENT_QUERIES: "2"
+      STORE_DIR: /data/store
+      PIP_BREAK_SYSTEM_PACKAGES: "1"
+      LOG_LEVEL: INFO
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        python3 - <<'PY'
+        import io, os, shutil, tarfile, urllib.request
+        ref = os.environ["GIT_REF"]
+        url = "https://github.com/anzaja72/valoria/archive/refs/heads/" + ref + ".tar.gz"
+        shutil.rmtree("/tmp/src", ignore_errors=True)
+        tarfile.open(fileobj=io.BytesIO(urllib.request.urlopen(url, timeout=60).read())).extractall("/tmp/src")
+        raiz = os.path.join("/tmp/src", os.listdir("/tmp/src")[0])
+        shutil.copytree(raiz, "/app", dirs_exist_ok=True)
+        print("Código descargado:", ref)
+        PY
+        pip install --no-cache-dir -q -r requirements.txt
+        exec uvicorn service.main:app --host 0.0.0.0 --port 8088 --proxy-headers --forwarded-allow-ips '*'
+    expose:
+      - "8088"
+    volumes:
+      - store:/data/store
+    shm_size: "1gb"
+    init: true
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [api]
+    # El puerto 80 del VPS lo usa otro servicio: solo se publica el 443 y el certificado
+    # se obtiene por TLS-ALPN (sin desafío HTTP).
+    command:
+      - sh
+      - -c
+      - |
+        cat > /etc/caddy/Caddyfile <<'EOF'
+        {
+        	auto_https disable_redirects
+        }
+        ${PUBLIC_DOMAIN:-consulta.legal-ia.co} {
+        	tls {
+        		issuer acme {
+        			disable_http_challenge
+        		}
+        	}
+        	reverse_proxy api:8088 {
+        		transport http {
+        			response_header_timeout 95s
+        		}
+        	}
+        }
+        EOF
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    ports:
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  store:
+  caddy_data:
+  caddy_config:
