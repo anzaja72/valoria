@@ -47,9 +47,31 @@ services:
     image: caddy:2
     restart: unless-stopped
     depends_on: [api]
-    command: caddy reverse-proxy --from ${PUBLIC_DOMAIN:-consulta.legal-ia.co} --to api:8088
+    # El puerto 80 del VPS lo usa otro servicio: solo se publica el 443 y el certificado
+    # se obtiene por TLS-ALPN (sin desafío HTTP).
+    command:
+      - sh
+      - -c
+      - |
+        cat > /etc/caddy/Caddyfile <<'EOF'
+        {
+        	auto_https disable_redirects
+        }
+        ${PUBLIC_DOMAIN:-consulta.legal-ia.co} {
+        	tls {
+        		issuer acme {
+        			disable_http_challenge
+        		}
+        	}
+        	reverse_proxy api:8088 {
+        		transport http {
+        			response_header_timeout 95s
+        		}
+        	}
+        }
+        EOF
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     ports:
-      - "80:80"
       - "443:443"
     volumes:
       - caddy_data:/data
