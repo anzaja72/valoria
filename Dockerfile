@@ -5,6 +5,7 @@ FROM mcr.microsoft.com/playwright/python:v1.56.0-noble
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
     STORE_DIR=/app/store
 
 WORKDIR /app
