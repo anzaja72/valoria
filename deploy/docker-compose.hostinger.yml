@@ -1,0 +1,41 @@
+# Despliegue en VPS Hostinger (Docker Manager): construye la imagen directo desde GitHub
+# y publica HTTPS con Caddy. Las claves NO van aquí: se definen como variable de entorno
+# TOOL_API_KEYS en el proyecto (hPanel → VPS → Docker Manager → proyecto → Environment).
+#
+# PUBLIC_DOMAIN: dominio con DNS apuntando al VPS (p. ej. consulta.legal-ia.co).
+# Mientras no exista el DNS se puede usar <ip-con-guiones>.sslip.io (p. ej. 187-77-4-10.sslip.io).
+services:
+  api:
+    build:
+      context: https://github.com/anzaja72/valoria.git#claude/hopeful-euler-2j0026
+    image: legal-ia-procesos:latest
+    restart: unless-stopped
+    environment:
+      TOOL_API_KEYS: ${TOOL_API_KEYS:-}
+      CACHE_TTL_SECONDS: "600"
+      SCRAPER_TIMEOUT_SECONDS: "75"
+      MAX_CONCURRENT_QUERIES: "2"
+      LOG_LEVEL: INFO
+    expose:
+      - "8088"
+    volumes:
+      - store:/app/store
+    shm_size: "1gb"
+    init: true
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [api]
+    command: caddy reverse-proxy --from ${PUBLIC_DOMAIN:-187-77-4-10.sslip.io} --to api:8088
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  store:
+  caddy_data:
+  caddy_config:
