@@ -22,10 +22,12 @@ def verificar_bearer(request: Request) -> str:
 
     header = request.headers.get("authorization", "")
     esquema, _, token = header.partition(" ")
-    token = token.strip()
-    if esquema.lower() != "bearer" or not token:
+    token = token.strip() if esquema.lower() == "bearer" else ""
+    # Alternativa para clientes que envían la clave en un header propio (p. ej. «API Key» en Chipp).
+    token = token or request.headers.get("x-api-key", "").strip()
+    if not token:
         raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, "Falta Authorization: Bearer <TOOL_API_KEY>",
+            status.HTTP_401_UNAUTHORIZED, "Falta Authorization: Bearer <TOOL_API_KEY> (o X-API-Key)",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

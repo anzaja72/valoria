@@ -71,3 +71,9 @@ def test_mcp_lote(make_client):
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
     ]).json()
     assert [x["id"] for x in r] == [1, 2]
+
+
+def test_mcp_acepta_x_api_key(make_client):
+    c, _ = make_client()
+    assert rpc(c, "tools/list", headers={"X-API-Key": "web_test"}).status_code == 200
+    assert rpc(c, "tools/list", headers={"X-API-Key": "otra"}).status_code == 401
