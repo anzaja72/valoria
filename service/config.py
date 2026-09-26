@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,8 +19,11 @@ def _int(name: str, default: int) -> int:
 
 
 def _keys() -> tuple[str, ...]:
+    """Claves separadas por coma. Tolera comillas, espacios y saltos de línea que dejan
+    algunos paneles (p. ej. el editor de entorno de hPanel)."""
     raw = os.getenv("TOOL_API_KEYS", "")
-    return tuple(k.strip() for k in raw.split(",") if k.strip())
+    partes = re.split(r"[,\s]+", raw.strip().strip("'\""))
+    return tuple(k.strip().strip("'\"") for k in partes if k.strip().strip("'\""))
 
 
 @dataclass(frozen=True)

@@ -108,3 +108,11 @@ def test_proceso_privado(make_client):
     d = c.post("/v1/consultar_proceso", headers=WEB, json={"radicado": RADICADO}).json()
     assert d["status"] == "ok" and d["proceso"]["es_privado"] is True
     assert "reserva" in d["mensaje_chat"]
+
+
+def test_claves_toleran_comillas_espacios_y_saltos(monkeypatch):
+    from service.config import _keys
+    monkeypatch.setenv("TOOL_API_KEYS", '"web_abc, \ndesktop_xyz"')
+    assert _keys() == ("web_abc", "desktop_xyz")
+    monkeypatch.setenv("TOOL_API_KEYS", "web_abc,desktop_xyz")
+    assert _keys() == ("web_abc", "desktop_xyz")
