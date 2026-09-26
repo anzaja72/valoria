@@ -60,8 +60,10 @@ def mensaje_estados(radicado: str, ini: date, fin: date, coincidencias: list[Coi
         return (f"No hay «Notificaciones por Estados» publicadas por {desp} entre {_rango(ini, fin)}, "
                 f"así que el radicado {r} no salió en estados en ese periodo.")
     total = sum(p.pdfs_leidos for p in publicaciones)
-    msg = (f"No: el radicado {r} no aparece en los {len(publicaciones)} estado(s) publicados entre "
-           f"{_rango(ini, fin)} ({total} PDF revisados).")
+    n = len(publicaciones)
+    estados = "el estado publicado" if n == 1 else f"los {n} estados publicados"
+    pdfs = "1 PDF revisado" if total == 1 else f"{total} PDF revisados"
+    msg = f"No: el radicado {r} no aparece en {estados} entre {_rango(ini, fin)} ({pdfs})."
     ilegibles = sum(len(p.pdfs_ilegibles) for p in publicaciones)
     if ilegibles:
         msg += f" Ojo: {ilegibles} PDF no se pudieron leer (posible escaneo); revíselos en el portal."
